@@ -13,7 +13,6 @@ access_header = None
 student_id = None
 school_uuid = None
 
-VolgendeLes = None 
 nieuweCijfers = None
 nieuweAfspaken = None
 fetchedAfspraken = None 
@@ -22,26 +21,27 @@ updateCijfers = None
 vakken = None
 docenten = None
 
-fetch_dagen = 3
+fetch_dagen = 10
 sync_interval = 2 # in minutes
 
 mention_prefix =  None
 webhook_url =  None
 
 def scheduleTime(time):
-    date = datetime.datetime.now().strftime("%Y-%m-%d") 
+    date = str(datetime.date.today())
     somtime = {
-            "08:30": date + "T08:30:00.000+01:00",
-            "09:20": date + "T09:20:00.000+01:00",
-            "10:10": date + "T10:10:00.000+01:00",
-            "11:20": date + "T11:20:00.000+01:00",
-            "12:10": date + "T12:10:00.000+01:00",
-            "13:30": date + "T13:30:00.000+01:00",
-            "14:30": date + "T14:30:00.000+01:00",
-            "15:20": date + "T15:20:00.000+01:00",
-            "17:00": date + "T17:00:00.000+01:00",
+            "08:30": date + "T08:30",
+            "09:20": date + "T09:20",
+            "10:10": date + "T10:10",
+            "11:20": date + "T11:20",
+            "12:10": date + "T12:10",
+            "13:30": date + "T13:30",
+            "14:30": date + "T14:30",
+            "15:20": date + "T15:20",
+            "17:00": date + "T17:00",
     }
     return somtime.get(time)
+
 
 def createEmbeds(afspraak):
     embed = {}
@@ -53,10 +53,10 @@ def createEmbeds(afspraak):
                 afspraak.get("telt mee"),
                 afspraak.get("vak"),
                 afspraak.get("beschrijving"))
-    elif "afspraken_id" in afspraak:
+    elif "afsprakenId" in afspraak:
         embed["title"] = "Volgende Les!"
         embed["description"] = """ Lesuur:  {}\nVak:  {}\nLokaal:  {}\nDocent:  {}""".format(
-                    afspraak.get("begin_tijd").split("T")[1][0:5],
+                    afspraak.get("begindatumtijd").split("T")[1],
                     afspraak.get("vak"),
                     afspraak.get("lokaal"),
                     afspraak.get("docent"))
@@ -79,15 +79,15 @@ def getFile(path):
 
 def load():
     global school_name, username, password, vakken, docenten, mention_prefix, webhook_url
-    data = getFile(path="config2/somtoday_credentials.json")
-    school_name = data["school_name"]
-    username = data["username"]
-    password = data["password"]
+    somtodaysettings = getFile(path="config2/somtoday_credentials.json")
+    school_name = somtodaysettings["school_name"]
+    username = somtodaysettings["username"]
+    password = somtodaysettings["password"]
 
     vakken = getFile(path="config2/extra/subjects.json")
     docenten = getFile(path="config2/extra/teachers.json")
 
-    discordSettings = getFile(path="config2/discord_not.json")
+    discordSettings = getFile(path="config2/settingsdiscord.json")
     mention_prefix = discordSettings["discord_webhook"]["mention_prefix"]
     webhook_url = discordSettings["discord_webhook"]["webhook_url"]
 
@@ -153,30 +153,26 @@ def get_student_id():
     students_json = json.loads(students_request.text)
     student_id = students_json["items"][0]["links"][0]["id"]
    
-    
-
 
 def getAfspraken():
     global access_token, student_id, endpoint, fetch_dagen, nieuweAfspaken
 
-    begin_date = datetime.datetime.now().strftime("%Y-%m-%d")
-    eind_date = str(datetime.datetime.now().strftime("%Y-%m-")) + str(int(begin_date.split("-")[2]) + int(fetch_dagen))
-    afspraken_header = {
+    beginDate = datetime.date.today()
+    eindDate = datetime.date.today() + datetime.timedelta(days=int(fetch_dagen))
+    afsprakenHeader = {
         "Authorization": "Bearer " + access_token, 
-        "Accept": "application/json",
-    }
-
-    afspraken_params = {
-        "begindatum": begin_date,
-        "einddatum": eind_date
-    }
-
+        "Accept": "application/json"}
+    afsprakenParams = {
+        "begindatum": beginDate,
+        "einddatum": eindDate}
     afspraken_url = endpoint + "/rest/v1/afspraken?" + str(student_id)
-    afspraken_request = requests.get(afspraken_url, headers=afspraken_header, params=afspraken_params)
-    afspraken_json = json.loads(afspraken_request.text)
-    nieuweAfspaken = afspraken_json
-        
-    intoFile(data=afspraken_json, path="data2/somtoday_afspraken.json")
+    afspraken_request = requests.get(afspraken_url, headers=afsprakenHeader, params=afsprakenParams)
+    try:
+        nieuweAfspaken = json.loads(afspraken_request.text)
+    except:
+        intoFile(data=afspraken_request.text, path="data2/crashafspraken.json")
+    
+    intoFile(data=nieuweAfspaken, path="data2/somtoday_afspraken.json")
     
 
 def getCijfers():
@@ -185,13 +181,16 @@ def getCijfers():
     cijfer_header = {"Authorization": "Bearer " +
                         access_token, "Accept": "application/json"}
     cijfer_url = endpoint + "/rest/v1/resultaten/huidigVoorLeerling/" + str(student_id)
+    
     cijfer_request = requests.get(cijfer_url, headers=cijfer_header)
-    cijfer_json = json.loads(cijfer_request.text)
-
+    try:
+        cijfer_json = json.loads(cijfer_request.text)
+    except:
+        intoFile(data=cijfer_request.text, path="data2/crashcijfers.json")
+    
     cijfers = []
     for cijfer in cijfer_json["items"]:
         if cijfer["type"] == "Toetskolom":
-
             if "weging" in cijfer:
                 weight = cijfer["weging"]
             elif "examenWeging" in cijfer:
@@ -215,59 +214,76 @@ def sortAfspraken():
     global nieuweAfspaken, fetchedAfspraken
     fetchedAfspraken = []
     for afspraak in nieuweAfspaken["items"]:
-        afspraken_id = afspraak["links"][0]["id"]
-        title = afspraak["titel"]
-        if "beginLesuur" in afspraak:
-            beginLesuur = afspraak["beginLesuur"]
-            eindLesuur = afspraak["eindLesuur"]
-        else:
-            beginLesuur = "None"
-            eindLesuur = "None"
-        begin_tijd = afspraak["beginDatumTijd"]
-        eind_tijd = afspraak["eindDatumTijd"]
-        title_list = title.split(" - ")
-        if title_list != ['Beweegmoment']:
-            if len(title_list) == 1:
-                vak = " ".join(title_list)
+        if afspraak["titel"] != "Beweegmoment":
+            afsprakenId = afspraak["links"][0]["id"]
+            if "locatie" in afspraak:
+                locatie = afspraak["locatie"]
             else:
-                vak = title_list[1]
-                if vak[0:4] == "ah4f":
-                    vak = vak[4:len(vak)]
-                elif vak[0:3] == "ah4":
-                    vak = vak[3:(len(vak)-1)]
+                locatie = None
+
+            title = afspraak["titel"]
+            listTitle = title.split(" - ")
+
+            if len(listTitle) != 1:
+                if locatie == None:
+                    locatie = listTitle[0]
+                
+                vak = listTitle[1]
+                if len(vak) > 9:
+                    vak = "nlt"
                 if vak in vakken:
                     vak = vakken.get(vak)
+                
+                docent = listTitle[len(listTitle)-1]
+                if docent in docenten:
+                    docent = docenten.get(docent)
+            else:
+                vak, docent, locatie = afspraak["titel"], afspraak["titel"], afspraak["titel"]
             
-            lokaal = title_list[0]
-            docent = title_list[len(title_list) -1]
-            if docent in docenten:
-                docent = docenten.get(docent)
-
+            if "beginLesuur" in afspraak:
+                tijdLesUur = afspraak["beginLesuur"]
+            
+            if "eindLesuur" in afspraak:
+                tijdEndLes = afspraak["eindLesuur"]
+            
+            if "beginDatumTijd" in afspraak:
+                Datum = afspraak["beginDatumTijd"]
+                if Datum[len(Datum)-4] == "1": 
+                    beginDatum = afspraak["beginDatumTijd"].removesuffix(":00.000+01:00")
+                else:
+                    beginDatum = afspraak["beginDatumTijd"].removesuffix(":00.000+02:00")
+            if "eindDatumTijd" in afspraak:
+                Datum = afspraak["eindDatumTijd"]
+                if Datum[len(Datum)-4] == "1": 
+                    eindDatum = afspraak["eindDatumTijd"].removesuffix(":00.000+01:00")
+                else:
+                    eindDatum = afspraak["eindDatumTijd"].removesuffix(":00.000+02:00")
+        
             afsprakenJson = {
-                "beginLesuur": beginLesuur,
-                "datum": begin_tijd.split("T")[0],
-                "afspraken_id": afspraken_id,
-                "docent": docent,
-                "lokaal": lokaal,
                 "vak": vak,
-                "eindLesuur": eindLesuur,
-                "begin_tijd": begin_tijd, 
-                "eind_tijd": eind_tijd
-            }
+                "lokaal": locatie,
+                "docent": docent,
+                "beginlesuur": tijdLesUur,
+                "eindlesuur": tijdEndLes,
+                "begindatumtijd": beginDatum,
+                "einddatumtijd": eindDatum,
+                "afsprakenId": afsprakenId
+                }
             fetchedAfspraken.append(afsprakenJson)
 
     if fetchedAfspraken != []:
         intoFile(data=fetchedAfspraken, path="data2/fetched_afspraken.json")
 
-def getlessen(requestedTime):
+def getles(requestedTime):
     global fetchedAfspraken
+
     komendeles = []
-    komendelessen = []
+    temp = []
     lesuur = scheduleTime(time=str(requestedTime))
     if lesuur != None or "None":
         for afspraak in fetchedAfspraken:
-            if afspraak["begin_tijd"] == lesuur:
-                komendeles.append(afspraak)
+            if afspraak["begindatumtijd"] == lesuur:
+                komendeles.append(afspraak)      
     else:
         print("error met tijd")
     return komendeles
@@ -276,13 +292,13 @@ def fullday():
     global fetchedAfspraken
     lessen = []
     temp = []
-    date = datetime.datetime.now().strftime("%Y-%m-") + str(int(datetime.datetime.now().strftime("%d")) + 1) 
+    date = str(datetime.date.today() + datetime.timedelta(days=1))
     for afspraak in fetchedAfspraken:
-        if afspraak.get("datum") == date:
+        if afspraak.get("begindatumtijd").split("T")[0] == date:
             vak = afspraak["vak"]
-            les = afspraak["beginLesuur"]
+            les = afspraak["beginlesuur"]
             lokaal = afspraak["lokaal"]
-            tijd = afspraak["begin_tijd"].split("T")[1].split(".")[0][0:5]
+            tijd = afspraak["begindatumtijd"].split("T")[1]
             temp.append("{} , lesuur: {} / {}\n , Vak: {}\n , Lokaal: {}\n\n".format(
                 les, les, tijd, vak,lokaal
             ))
@@ -309,16 +325,18 @@ def discord(requestedTime):
     listEmbeds = []
     if requestedTime == "fullday":
         afspraken = fullday()
-        #print("".join(afspraken["lessen"]))
+        #print(afspraken)
+        #print(createEmbeds("".join(afspraken["lessen"])))
         listEmbeds.append(createEmbeds("".join(afspraken["lessen"])))
 
-
-    afspraak = getlessen(requestedTime)
+    
+    afspraak = getles(requestedTime)
     #print("\nAfspraken: " + str(afspraak))
     if afspraak != [] or None:
         for les in afspraak:
             listEmbeds.append(createEmbeds(les))
-        
+
+
     #print("Nieuwe Cijfers:" + str(updateCijfers))
     if updateCijfers != [] or None:
         for cijfer in updateCijfers:
@@ -368,7 +386,18 @@ def updateSomtoday(requestedTime):
     try: 
         discord(requestedTime)
     except:
-        print("Eror Discord")
+        time.sleep(1)
+        try:
+            discord(requestedTime)
+        except:
+            print("Eror Discord")
+
+def test():
+    Auth()
+    getAfspraken()
+    sortAfspraken()
+    getCijfers()
+    discord("fullday")
 
 
 load()
@@ -376,6 +405,9 @@ get_school_uuid()
 
 Auth()
 get_student_id()
+
+#test()
+#updateSomtoday(requestedTime="08:30")
 
 schedule.every().day.at("08:20").do(updateSomtoday, requestedTime="08:30")
 schedule.every().day.at("09:10").do(updateSomtoday, requestedTime="09:20")
@@ -387,6 +419,7 @@ schedule.every().day.at("14:20").do(updateSomtoday, requestedTime="14:30")
 schedule.every().day.at("15:10").do(updateSomtoday, requestedTime="15:20")
 schedule.every().day.at("16:50").do(updateSomtoday, requestedTime="17:00")
 schedule.every().day.at("22:30").do(updateSomtoday, requestedTime="fullday")
+schedule.every().day.at("07:00").do(updateSomtoday, requestedTime="fullday")
 schedule.every(sync_interval).minutes.do(updateSomtoday, requestedTime="cijfer")
 
 
