@@ -21,8 +21,8 @@ updateCijfers = None
 vakken = None
 docenten = None
 
-fetch_dagen = 10
-sync_interval = 2 # in minutes
+fetch_dagen = 3
+sync_interval = 3 # in minutes
 
 mention_prefix =  None
 webhook_url =  None
@@ -61,8 +61,8 @@ def createEmbeds(afspraak):
                     afspraak.get("lokaal"),
                     afspraak.get("docent"))
     else:
-        embed["title"] = "Lessen voor morgen! "
-        embed["description"] = afspraak
+        embed["title"] = "Lessen voor {}".format(afspraak["title"])
+        embed["description"] = afspraak["lessen"]
     embed["footer"] = {"text": "Send on: {}".format(datetime.datetime.now().strftime("%H:%M"))}
     return embed
 
@@ -152,7 +152,7 @@ def get_student_id():
         endpoint + "/rest/v1/leerlingen", headers=access_header)
     students_json = json.loads(students_request.text)
     student_id = students_json["items"][0]["links"][0]["id"]
-   
+ 
 
 def getAfspraken():
     global access_token, student_id, endpoint, fetch_dagen, nieuweAfspaken
@@ -167,112 +167,119 @@ def getAfspraken():
         "einddatum": eindDate}
     afspraken_url = endpoint + "/rest/v1/afspraken?" + str(student_id)
     afspraken_request = requests.get(afspraken_url, headers=afsprakenHeader, params=afsprakenParams)
-    try:
+    if afspraken_request != "":
         nieuweAfspaken = json.loads(afspraken_request.text)
-    except:
+        intoFile(data=nieuweAfspaken, path="data2/somtoday_afspraken.json")
+    else:
+        print("error in afspraken krijgen")
         intoFile(data=afspraken_request.text, path="data2/crashafspraken.json")
+
     
-    intoFile(data=nieuweAfspaken, path="data2/somtoday_afspraken.json")
     
 
 def getCijfers():
     global endpoint, access_token, student_id, nieuweCijfers, updateCijfers
-    
     cijfer_header = {"Authorization": "Bearer " +
                         access_token, "Accept": "application/json"}
     cijfer_url = endpoint + "/rest/v1/resultaten/huidigVoorLeerling/" + str(student_id)
-    
     cijfer_request = requests.get(cijfer_url, headers=cijfer_header)
-    try:
+    if cijfer_request.text != "" or cijfer_request.status_code != 404:
         cijfer_json = json.loads(cijfer_request.text)
-    except:
+        cijfers = []
+        for cijfer in cijfer_json["items"]:
+            if cijfer["type"] == "Toetskolom":
+                if "weging" in cijfer:
+                    weight = cijfer["weging"]
+                elif "examenWeging" in cijfer:
+                    weight = str(cijfer["examenWeging"]) + " SE"
+                else:
+                    weight = None
+                description = cijfer["omschrijving"] if "omschrijving" in cijfer else None
+                cijfers.append({"cijfer_id": cijfer["links"][0]["id"],"resultaat": cijfer["resultaat"], "telt mee": weight,
+                                        "beschrijving": description, "vak":cijfer["vak"]["afkorting"]})
+
+        oudeCijfers = getFile("data2/somtoday_cijfers.json")
+        intoFile(path="data2/somtoday_cijfers.json", data=cijfers)
+
+        updateCijfers = []
+        for grade in cijfers:
+            if grade not in oudeCijfers:
+                updateCijfers.append(grade)
+        nieuweCijfers = cijfers
+
+    else:
+        print(cijfer_request.status_code)
         intoFile(data=cijfer_request.text, path="data2/crashcijfers.json")
     
-    cijfers = []
-    for cijfer in cijfer_json["items"]:
-        if cijfer["type"] == "Toetskolom":
-            if "weging" in cijfer:
-                weight = cijfer["weging"]
-            elif "examenWeging" in cijfer:
-                weight = str(cijfer["examenWeging"]) + " SE"
-            else:
-                weight = None
-            description = cijfer["omschrijving"] if "omschrijving" in cijfer else None
-            cijfers.append({"cijfer_id": cijfer["links"][0]["id"],"resultaat": cijfer["resultaat"], "telt mee": weight,
-                                     "beschrijving": description, "vak":cijfer["vak"]["afkorting"]})
-
-    oudeCijfers = getFile("data2/somtoday_cijfers.json")
-    intoFile(path="data2/somtoday_cijfers.json", data=cijfers)
-
-    updateCijfers = []
-    for grade in cijfers:
-        if grade not in oudeCijfers:
-            updateCijfers.append(grade)
-    nieuweCijfers = cijfers
-
+    
 def sortAfspraken():
     global nieuweAfspaken, fetchedAfspraken
     fetchedAfspraken = []
-    for afspraak in nieuweAfspaken["items"]:
-        if afspraak["titel"] != "Beweegmoment":
-            afsprakenId = afspraak["links"][0]["id"]
-            if "locatie" in afspraak:
-                locatie = afspraak["locatie"]
-            else:
-                locatie = None
-
-            title = afspraak["titel"]
-            listTitle = title.split(" - ")
-
-            if len(listTitle) != 1:
-                if locatie == None:
-                    locatie = listTitle[0]
-                
-                vak = listTitle[1]
-                if len(vak) > 9:
-                    vak = "nlt"
-                if vak in vakken:
-                    vak = vakken.get(vak)
-                
-                docent = listTitle[len(listTitle)-1]
-                if docent in docenten:
-                    docent = docenten.get(docent)
-            else:
-                vak, docent, locatie = afspraak["titel"], afspraak["titel"], afspraak["titel"]
-            
-            if "beginLesuur" in afspraak:
-                tijdLesUur = afspraak["beginLesuur"]
-            
-            if "eindLesuur" in afspraak:
-                tijdEndLes = afspraak["eindLesuur"]
-            
-            if "beginDatumTijd" in afspraak:
-                Datum = afspraak["beginDatumTijd"]
-                if Datum[len(Datum)-4] == "1": 
-                    beginDatum = afspraak["beginDatumTijd"].removesuffix(":00.000+01:00")
+    if nieuweAfspaken != None:
+        for afspraak in nieuweAfspaken["items"]:
+            if afspraak["titel"] != "Beweegmoment":
+                afsprakenId = afspraak["links"][0]["id"]
+                if "locatie" in afspraak:
+                    locatie = afspraak["locatie"]
                 else:
-                    beginDatum = afspraak["beginDatumTijd"].removesuffix(":00.000+02:00")
-            if "eindDatumTijd" in afspraak:
-                Datum = afspraak["eindDatumTijd"]
-                if Datum[len(Datum)-4] == "1": 
-                    eindDatum = afspraak["eindDatumTijd"].removesuffix(":00.000+01:00")
+                    locatie = None
+
+                title = afspraak["titel"]
+                listTitle = title.split(" - ")
+
+                if len(listTitle) != 1:
+                    if locatie == None:
+                        locatie = listTitle[0]
+                    
+                    vak = listTitle[1]
+                    if len(vak) > 9:
+                        vak = "nlt"
+                    if vak in vakken:
+                        vak = vakken.get(vak)
+                    
+                    docent = listTitle[len(listTitle)-1]
+                    if docent in docenten:
+                        docent = docenten.get(docent)
                 else:
-                    eindDatum = afspraak["eindDatumTijd"].removesuffix(":00.000+02:00")
-        
-            afsprakenJson = {
-                "vak": vak,
-                "lokaal": locatie,
-                "docent": docent,
-                "beginlesuur": tijdLesUur,
-                "eindlesuur": tijdEndLes,
-                "begindatumtijd": beginDatum,
-                "einddatumtijd": eindDatum,
-                "afsprakenId": afsprakenId
+                    vak, docent, locatie = afspraak["titel"], afspraak["titel"], afspraak["titel"]
+                
+                if "beginLesuur" in afspraak:
+                    tijdLesUur = afspraak["beginLesuur"]
+                else:
+                    tijdLesUur = None
+                
+                if "eindLesuur" in afspraak:
+                    tijdEndLes = afspraak["eindLesuur"]
+                else:
+                    tijdEndLes = None
+                
+                if "beginDatumTijd" in afspraak:
+                    Datum = afspraak["beginDatumTijd"]
+                    if Datum[len(Datum)-4] == "1": 
+                        beginDatum = afspraak["beginDatumTijd"].removesuffix(":00.000+01:00")
+                    else:
+                        beginDatum = afspraak["beginDatumTijd"].removesuffix(":00.000+02:00")
+                if "eindDatumTijd" in afspraak:
+                    Datum = afspraak["eindDatumTijd"]
+                    if Datum[len(Datum)-4] == "1": 
+                        eindDatum = afspraak["eindDatumTijd"].removesuffix(":00.000+01:00")
+                    else:
+                        eindDatum = afspraak["eindDatumTijd"].removesuffix(":00.000+02:00")
+            
+                afsprakenJson = {
+                    "vak": vak,
+                    "lokaal": locatie,
+                    "docent": docent,
+                    "beginlesuur": tijdLesUur,
+                    "eindlesuur": tijdEndLes,
+                    "begindatumtijd": beginDatum,
+                    "einddatumtijd": eindDatum,
+                    "afsprakenId": afsprakenId
                 }
-            fetchedAfspraken.append(afsprakenJson)
+                fetchedAfspraken.append(afsprakenJson)
 
-    if fetchedAfspraken != []:
-        intoFile(data=fetchedAfspraken, path="data2/fetched_afspraken.json")
+        if fetchedAfspraken != []:
+            intoFile(data=fetchedAfspraken, path="data2/fetched_afspraken.json")
 
 def getles(requestedTime):
     global fetchedAfspraken
@@ -281,18 +288,23 @@ def getles(requestedTime):
     temp = []
     lesuur = scheduleTime(time=str(requestedTime))
     if lesuur != None or "None":
-        for afspraak in fetchedAfspraken:
-            if afspraak["begindatumtijd"] == lesuur:
-                komendeles.append(afspraak)      
+        if fetchedAfspraken != None:
+            for afspraak in fetchedAfspraken:
+                if afspraak["begindatumtijd"] == lesuur:
+                    komendeles.append(afspraak)      
     else:
         print("error met tijd")
     return komendeles
 
-def fullday():
+def fullday(dag):
     global fetchedAfspraken
     lessen = []
     temp = []
-    date = str(datetime.date.today() + datetime.timedelta(days=1))
+    if dag == "morgen":
+        date = str(datetime.date.today() + datetime.timedelta(days=1))
+    elif dag == "vandaag":
+        date = str(datetime.date.today())
+
     for afspraak in fetchedAfspraken:
         if afspraak.get("begindatumtijd").split("T")[0] == date:
             vak = afspraak["vak"]
@@ -300,14 +312,16 @@ def fullday():
             lokaal = afspraak["lokaal"]
             tijd = afspraak["begindatumtijd"].split("T")[1]
             temp.append("{} , lesuur: {} / {}\n , Vak: {}\n , Lokaal: {}\n\n".format(
-                les, les, tijd, vak,lokaal
-            ))
+                les, les, tijd, vak, lokaal))
     temp.sort()
     for les in temp:
         leslist = les.split(" , ")
         lessen.append(" ".join(leslist[1:]))
-
-    return {"lessen": lessen}
+    if dag == "morgen":
+        title = "Lessen voor morgen!"
+    elif dag == "vandaag":
+        title = "Lessen voor vandaag!"
+    return {"title": title , "lessen": " ".join(lessen)}
 
 def discord(requestedTime):
     global mention_prefix, webhook_url, updateCijfers
@@ -322,89 +336,76 @@ def discord(requestedTime):
             print(response.reason)
             print(response.text)
 
-    listEmbeds = []
-    if requestedTime == "fullday":
-        afspraken = fullday()
-        #print(afspraken)
-        #print(createEmbeds("".join(afspraken["lessen"])))
-        listEmbeds.append(createEmbeds("".join(afspraken["lessen"])))
+    if updateCijfers != None or []:
+        listEmbeds = []
+        if requestedTime == "morgen":
+            afspraken = fullday("morgen")
+            listEmbeds.append(createEmbeds(afspraken))
+        elif requestedTime == "vandaag":
+            afspraken = fullday("vandaag")
+            listEmbeds.append(createEmbeds(afspraken))
 
-    
-    afspraak = getles(requestedTime)
-    #print("\nAfspraken: " + str(afspraak))
-    if afspraak != [] or None:
-        for les in afspraak:
-            listEmbeds.append(createEmbeds(les))
+        
+        afspraak = getles(requestedTime)
+        #print("\nAfspraken: " + str(afspraak))
+        if afspraak != [] or None:
+            for les in afspraak:
+                listEmbeds.append(createEmbeds(les))
 
 
-    #print("Nieuwe Cijfers:" + str(updateCijfers))
-    if updateCijfers != [] or None:
-        for cijfer in updateCijfers:
-            listEmbeds.append(createEmbeds(cijfer))
-        updateCijfers = None 
+        #print("Nieuwe Cijfers:" + str(updateCijfers))
+        if updateCijfers != None and []:
+            for cijfer in updateCijfers:
+                listEmbeds.append(createEmbeds(cijfer))
+            updateCijfers = None 
 
-    #print("list embeds: " + str(listEmbeds))
-    if listEmbeds != []:
-        sendDiscord(listEmbeds)
-        # for x in listEmbeds:
-        #     print("send: " + str(x))
-        #     sendDiscord(x)
+        #print("list embeds: " + str(listEmbeds))
+        if listEmbeds != []:
+            sendDiscord(listEmbeds)
+            # for x in listEmbeds:
+            #     print("send: " + str(x))
+            #     sendDiscord(x)
+        else:
+            print("Geen les of  nieuwe cijfers! \nCheck On: {}".format(datetime.datetime.now().strftime("%H:%M")))
     else:
         print("Geen les of  nieuwe cijfers! \nCheck On: {}".format(datetime.datetime.now().strftime("%H:%M")))
 
 
 def updateSomtoday(requestedTime):
-    try: 
-        Auth()
-    except:
-        time.sleep(1)
-        try:
-            Auth()
-        except:
-            print("Error Auth")
-
-    try:
-        getAfspraken()
-        sortAfspraken()
-    except:
-        time.sleep(1)
-        try:
-            getAfspraken()
-            sortAfspraken()
-        except:
-            print("Error Afspraken")
-
-    try:
-        getCijfers()
-    except:
-        time.sleep(1)
-        try:
-            getCijfers()
-        except:
-            print("Error Cijfer")
-            
-    try: 
-        discord(requestedTime)
-    except:
-        time.sleep(1)
-        try:
-            discord(requestedTime)
-        except:
-            print("Eror Discord")
-
-def test():
     Auth()
+    get_student_id()
     getAfspraken()
     sortAfspraken()
     getCijfers()
-    discord("fullday")
+    discord(requestedTime)
+
+def updateCijfer():
+    Auth()
+    get_student_id()
+    getCijfers()
+    discord("cijfer")
+
+def test():
+    Auth()
+    print("1")
+    get_student_id()
+    print("2")
+    getAfspraken()
+    print("3")
+    sortAfspraken()
+    print("4")
+    getCijfers()
+    print("5")
+    discord("vandaag")
+    print("6")
 
 
 load()
 get_school_uuid()
 
-Auth()
-get_student_id()
+#test()
+#Auth()
+#get_student_id()
 
 #test()
 #updateSomtoday(requestedTime="08:30")
@@ -418,12 +419,11 @@ schedule.every().day.at("13:20").do(updateSomtoday, requestedTime="13:30")
 schedule.every().day.at("14:20").do(updateSomtoday, requestedTime="14:30")
 schedule.every().day.at("15:10").do(updateSomtoday, requestedTime="15:20")
 schedule.every().day.at("16:50").do(updateSomtoday, requestedTime="17:00")
-schedule.every().day.at("22:30").do(updateSomtoday, requestedTime="fullday")
-schedule.every().day.at("07:00").do(updateSomtoday, requestedTime="fullday")
-schedule.every(sync_interval).minutes.do(updateSomtoday, requestedTime="cijfer")
+schedule.every().day.at("22:30").do(updateSomtoday, requestedTime="morgen")
+schedule.every().day.at("07:00").do(updateSomtoday, requestedTime="vandaag")
+schedule.every(sync_interval).minutes.do(updateCijfer)
 
-
-print("Updating!")
+print("Running!")
 while True:
     schedule.run_pending()
-    time.sleep(1)
+    time.sleep(0.2)
