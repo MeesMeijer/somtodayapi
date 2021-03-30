@@ -1,4 +1,4 @@
-# somtodayapi
+# Somtoday Api
 Dit Programma gebruikt de Somtoday Api om Afspraken en Cijfers op te halen.
 
 ## Instalatie
@@ -6,7 +6,7 @@ Dit Programma gebruikt de Somtoday Api om Afspraken en Cijfers op te halen.
 pip install schedule requests
 ```
 
-## De Nodige infromatie:
+## De Nodige informatie:
 
 1. Maak folders data en config aan
 2. In config maak deze bestanden:
