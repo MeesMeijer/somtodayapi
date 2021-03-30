@@ -184,8 +184,10 @@ def getCijfers():
                         access_token, "Accept": "application/json"}
     cijfer_url = endpoint + "/rest/v1/resultaten/huidigVoorLeerling/" + str(student_id) + "?"
     cijfer_request = requests.get(cijfer_url, headers=cijfer_header)
-    print(cijfer_request.json())
-    if cijfer_request.text != "":
+    if "code" in cijfer_request.json():
+        if cijfer_request.json()["code"] == 404:
+            print(cijfer_request.json())
+    elif "code" not in cijfer_request.json():
         cijfer_json = json.loads(cijfer_request.text)
         cijfers = []
         for cijfer in cijfer_json["items"]:
@@ -212,7 +214,7 @@ def getCijfers():
         print("Error met cijfers!")
         intoFile(data=cijfer_request.text, path="data/crashcijfers.json")
     
-    
+
 def sortAfspraken():
     global nieuweAfspaken, fetchedAfspraken
     fetchedAfspraken = []
