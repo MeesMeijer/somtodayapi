@@ -164,25 +164,28 @@ def getAfspraken():
     afsprakenParams = {
         "begindatum": beginDate,
         "einddatum": eindDate}
-    afspraken_url = endpoint + "/rest/v1/afspraken/" + str(student_id)
+    afspraken_url = endpoint + "/rest/v1/afspraken"
     afspraken_request = requests.get(afspraken_url, headers=afsprakenHeader, params=afsprakenParams)
-    if afspraken_request != "" or afspraken_request.status_code != 404:
-        nieuweAfspaken = json.loads(afspraken_request.text)
-        intoFile(data=nieuweAfspaken, path="data/somtoday_afspraken.json")
+    if "code" in afspraken_request.json():
+        if afspraken_request.json()["code"] == 404:
+            print(afspraken_request.json())
+
+    if "code" not in afspraken_request.json():
+            nieuweAfspaken = json.loads(afspraken_request.text)
+            intoFile(data=nieuweAfspaken, path="data/somtoday_afspraken.json")
     else:
         print("error in afspraken krijgen")
         intoFile(data=afspraken_request.text, path="data/crashafspraken.json")
 
     
-    
-
 def getCijfers():
     global endpoint, access_token, student_id, nieuweCijfers, updateCijfers
     cijfer_header = {"Authorization": "Bearer " +
                         access_token, "Accept": "application/json"}
     cijfer_url = endpoint + "/rest/v1/resultaten/huidigVoorLeerling/" + str(student_id) + "?"
     cijfer_request = requests.get(cijfer_url, headers=cijfer_header)
-    if cijfer_request.text != "" or cijfer_request.status_code != 404:
+    print(cijfer_request.json())
+    if cijfer_request.text != "":
         cijfer_json = json.loads(cijfer_request.text)
         cijfers = []
         for cijfer in cijfer_json["items"]:
@@ -205,16 +208,15 @@ def getCijfers():
             if grade not in oudeCijfers:
                 updateCijfers.append(grade)
         nieuweCijfers = cijfers
-
     else:
-        print(cijfer_request.status_code)
+        print("Error met cijfers!")
         intoFile(data=cijfer_request.text, path="data/crashcijfers.json")
     
     
 def sortAfspraken():
     global nieuweAfspaken, fetchedAfspraken
     fetchedAfspraken = []
-    if nieuweAfspaken != None:
+    if nieuweAfspaken != "" or None:
         for afspraak in nieuweAfspaken["items"]:
             if afspraak["titel"] != "Beweegmoment":
                 afsprakenId = afspraak["links"][0]["id"]
@@ -231,7 +233,8 @@ def sortAfspraken():
                         locatie = listTitle[0]
                     
                     vak = listTitle[1]
-                
+                    if len(vak) > 9:
+                        vak = "nlt"
                     if vak in vakken:
                         vak = vakken.get(vak)
                     
@@ -396,23 +399,25 @@ def test():
 
 load()
 get_school_uuid()
+
 Auth()
 get_student_id()
 
-schedule.every().day.at("08:20").do(updateSomtoday, requestedTime="08:30")
-schedule.every().day.at("09:10").do(updateSomtoday, requestedTime="09:20")
-schedule.every().day.at("10:00").do(updateSomtoday, requestedTime="10:10")
-schedule.every().day.at("11:10").do(updateSomtoday, requestedTime="11:20")
-schedule.every().day.at("12:00").do(updateSomtoday, requestedTime="12:10")
-schedule.every().day.at("13:20").do(updateSomtoday, requestedTime="13:30")
-schedule.every().day.at("14:20").do(updateSomtoday, requestedTime="14:30")
-schedule.every().day.at("15:10").do(updateSomtoday, requestedTime="15:20")
-schedule.every().day.at("16:50").do(updateSomtoday, requestedTime="17:00")
-schedule.every().day.at("22:30").do(updateSomtoday, requestedTime="morgen")
-schedule.every().day.at("07:00").do(updateSomtoday, requestedTime="vandaag")
-schedule.every(sync_interval).minutes.do(updateCijfer)
+test()
+# schedule.every().day.at("08:20").do(updateSomtoday, requestedTime="08:30")
+# schedule.every().day.at("09:10").do(updateSomtoday, requestedTime="09:20")
+# schedule.every().day.at("10:00").do(updateSomtoday, requestedTime="10:10")
+# schedule.every().day.at("11:10").do(updateSomtoday, requestedTime="11:20")
+# schedule.every().day.at("12:00").do(updateSomtoday, requestedTime="12:10")
+# schedule.every().day.at("13:20").do(updateSomtoday, requestedTime="13:30")
+# schedule.every().day.at("14:20").do(updateSomtoday, requestedTime="14:30")
+# schedule.every().day.at("15:10").do(updateSomtoday, requestedTime="15:20")
+# schedule.every().day.at("16:50").do(updateSomtoday, requestedTime="17:00")
+# schedule.every().day.at("22:30").do(updateSomtoday, requestedTime="morgen")
+# schedule.every().day.at("07:00").do(updateSomtoday, requestedTime="vandaag")
+# schedule.every(sync_interval).minutes.do(updateCijfer)
 
-print("Running!")
-while True:
-    schedule.run_pending()
-    time.sleep(0.2)
+# print("Running!")
+# while True:
+#     schedule.run_pending()
+#     time.sleep(0.2)
