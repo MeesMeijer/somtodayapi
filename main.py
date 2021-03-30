@@ -79,15 +79,15 @@ def getFile(path):
 
 def load():
     global school_name, username, password, vakken, docenten, mention_prefix, webhook_url
-    somtodaysettings = getFile(path="config2/somtoday_credentials.json")
+    somtodaysettings = getFile(path="config/somtodaysettings.json")
     school_name = somtodaysettings["school_name"]
     username = somtodaysettings["username"]
     password = somtodaysettings["password"]
 
-    vakken = getFile(path="config2/extra/subjects.json")
-    docenten = getFile(path="config2/extra/teachers.json")
+    vakken = getFile(path="config/extra/subjects.json")
+    docenten = getFile(path="config/extra/teachers.json")
 
-    discordSettings = getFile(path="config2/settingsdiscord.json")
+    discordSettings = getFile(path="config/settingsdiscord.json")
     mention_prefix = discordSettings["discord_webhook"]["mention_prefix"]
     webhook_url = discordSettings["discord_webhook"]["webhook_url"]
 
@@ -148,8 +148,7 @@ def Auth():
 
 def get_student_id():
     global student_id, access_header, endpoint
-    students_request = requests.get(
-        endpoint + "/rest/v1/leerlingen", headers=access_header)
+    students_request = requests.get(endpoint + "/rest/v1/leerlingen", headers=access_header)
     students_json = json.loads(students_request.text)
     student_id = students_json["items"][0]["links"][0]["id"]
  
@@ -165,14 +164,14 @@ def getAfspraken():
     afsprakenParams = {
         "begindatum": beginDate,
         "einddatum": eindDate}
-    afspraken_url = endpoint + "/rest/v1/afspraken?" + str(student_id)
+    afspraken_url = endpoint + "/rest/v1/afspraken/" + str(student_id)
     afspraken_request = requests.get(afspraken_url, headers=afsprakenHeader, params=afsprakenParams)
-    if afspraken_request != "":
+    if afspraken_request != "" or afspraken_request.status_code != 404:
         nieuweAfspaken = json.loads(afspraken_request.text)
-        intoFile(data=nieuweAfspaken, path="data2/somtoday_afspraken.json")
+        intoFile(data=nieuweAfspaken, path="data/somtoday_afspraken.json")
     else:
         print("error in afspraken krijgen")
-        intoFile(data=afspraken_request.text, path="data2/crashafspraken.json")
+        intoFile(data=afspraken_request.text, path="data/crashafspraken.json")
 
     
     
@@ -181,7 +180,7 @@ def getCijfers():
     global endpoint, access_token, student_id, nieuweCijfers, updateCijfers
     cijfer_header = {"Authorization": "Bearer " +
                         access_token, "Accept": "application/json"}
-    cijfer_url = endpoint + "/rest/v1/resultaten/huidigVoorLeerling/" + str(student_id)
+    cijfer_url = endpoint + "/rest/v1/resultaten/huidigVoorLeerling/" + str(student_id) + "?"
     cijfer_request = requests.get(cijfer_url, headers=cijfer_header)
     if cijfer_request.text != "" or cijfer_request.status_code != 404:
         cijfer_json = json.loads(cijfer_request.text)
@@ -198,8 +197,8 @@ def getCijfers():
                 cijfers.append({"cijfer_id": cijfer["links"][0]["id"],"resultaat": cijfer["resultaat"], "telt mee": weight,
                                         "beschrijving": description, "vak":cijfer["vak"]["afkorting"]})
 
-        oudeCijfers = getFile("data2/somtoday_cijfers.json")
-        intoFile(path="data2/somtoday_cijfers.json", data=cijfers)
+        oudeCijfers = getFile("data/somtoday_cijfers.json")
+        intoFile(path="data/somtoday_cijfers.json", data=cijfers)
 
         updateCijfers = []
         for grade in cijfers:
@@ -209,7 +208,7 @@ def getCijfers():
 
     else:
         print(cijfer_request.status_code)
-        intoFile(data=cijfer_request.text, path="data2/crashcijfers.json")
+        intoFile(data=cijfer_request.text, path="data/crashcijfers.json")
     
     
 def sortAfspraken():
@@ -279,7 +278,7 @@ def sortAfspraken():
                 fetchedAfspraken.append(afsprakenJson)
 
         if fetchedAfspraken != []:
-            intoFile(data=fetchedAfspraken, path="data2/fetched_afspraken.json")
+            intoFile(data=fetchedAfspraken, path="data/fetched_afspraken.json")
 
 def getles(requestedTime):
     global fetchedAfspraken
@@ -373,7 +372,6 @@ def discord(requestedTime):
 
 def updateSomtoday(requestedTime):
     Auth()
-    get_student_id()
     getAfspraken()
     sortAfspraken()
     getCijfers()
@@ -381,14 +379,11 @@ def updateSomtoday(requestedTime):
 
 def updateCijfer():
     Auth()
-    get_student_id()
     getCijfers()
     discord("cijfer")
 
 def test():
     Auth()
-    print("1")
-    get_student_id()
     print("2")
     getAfspraken()
     print("3")
@@ -402,13 +397,8 @@ def test():
 
 load()
 get_school_uuid()
-
-#test()
-#Auth()
-#get_student_id()
-
-#test()
-#updateSomtoday(requestedTime="08:30")
+Auth()
+get_student_id()
 
 schedule.every().day.at("08:20").do(updateSomtoday, requestedTime="08:30")
 schedule.every().day.at("09:10").do(updateSomtoday, requestedTime="09:20")
