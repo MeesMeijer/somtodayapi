@@ -231,8 +231,7 @@ def sortAfspraken():
                         locatie = listTitle[0]
                     
                     vak = listTitle[1]
-                    if len(vak) > 9:
-                        vak = "nlt"
+                
                     if vak in vakken:
                         vak = vakken.get(vak)
                     
