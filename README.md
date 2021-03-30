@@ -8,8 +8,8 @@ pip install schedule requests
 
 ## De Nodige informatie:
 
-1. Maak folders data en config aan
-2. In config maak deze bestanden:
+1. Maak de folders data en config aan.
+2. In config zet je de volgende bestanden:
 
     ## settingsdiscord.json: 
     ```json
@@ -33,8 +33,8 @@ pip install schedule requests
     }
     ```
     
-    Hierna maak in config, een folder extra aan: 
-    Hierin maak je de bestanden:
+    Hierna maak in config, folder: extra aan. 
+    Hierin zet je de volgende bestanden:
     
     ## subjects.json
     ```json
