@@ -11,32 +11,21 @@ pip install schedule requests
 1. Maak de folders data en config aan.
 2. In config zet je de volgende bestanden:
 
-    ## settingsdiscord.json: 
+    ## settings.json: 
     ```json
     {
-        "discord_webhook": {
-              "name": "", 
-              "username": "", 
-              "avatar_url": "",
-              "mention_prefix": "<@ YOur mentions>",
-              "webhook_url": "Your Webhook url"
-          }
-    }
-    ```
-
-    ## somtodaysettings.json:
-    ```json
-    {
-        "school_name": "",
-        "username": "",
-        "password": ""
+        "webhook": {
+              "webhookUrl": "Your Webhook url"
+          },
+        "somtoday": {
+             "schoolNaam": "",
+             "leerlingNummer": "",
+             "wachtwoord": ""
+        }
     }
     ```
     
-    Hierna maak in config, folder: extra aan. 
-    Hierin zet je de volgende bestanden:
-    
-    ## subjects.json
+    ## vakken.json
     ```json
     {
         "shortname vak": "lange naam vak"
@@ -44,7 +33,7 @@ pip install schedule requests
     } Als je dit niet wilt, laat dan file leeg met {}
     ```
     
-    ## teachers.json:
+    ## docenten.json:
     ```json
     {
         "afkorting": "Naam docent"
