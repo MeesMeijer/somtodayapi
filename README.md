@@ -41,4 +41,4 @@ pip install schedule requests
     ```
     
 ## Problemen 
-Ik ben nog veel aan het veranderen binnen dit programmer, als je het gebruikt, check dan of je de nieuwst versie hebt!
+Ik ben nog veel aan het veranderen binnen dit programma, als je het gebruikt, check dan of je de nieuwst versie hebt!
