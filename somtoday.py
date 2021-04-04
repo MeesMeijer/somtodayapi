@@ -19,6 +19,7 @@ accessToken = None
 refreshToken = None
 accesHeader = None
 endpoint = None
+Authtime = None
 
 # Settings:
 CheckDagen = 5      # Dagen
@@ -52,62 +53,51 @@ def finduuid():
     global baseUrl, schoolNaam, schooluuid
     allschooluuids = requests.get("https://servers.somtoday.nl/organisaties.json")
     if allschooluuids.status_code < 400:
-        try:
-            allschooluuids = json.loads(allschooluuids.text)
-            for school in allschooluuids[0]["instellingen"]:
-                if school["naam"] == schoolNaam:
-                    schooluuid = school["uuid"]
-                    break
-        except:
-            print("Geen response of error in school uuids!")
+        allschooluuids = json.loads(allschooluuids.text)
+        for school in allschooluuids[0]["instellingen"]:
+            if school["naam"] == schoolNaam:
+                schooluuid = school["uuid"]
+                break
     else:
-        print("Error met uuids Code: {}".format(allschooluuids.status_code))
+        print("Uuids: Niet gelukt! Code: {}".format(allschooluuids.status_code))
 
 
 def auth():
-    global accessToken, accesHeader, endpoint, refreshToken, baseUrl, leerlingNummer, wachtwoord
-    isAuth = accessToken is not None
-    data = {
-        "grant_type": "password",
-        "username": schooluuid + "\\" + leerlingNummer,
-        "password": wachtwoord,
-        "scope": "openid"
-    }
-    accesHeaders = {
-        "Authorization": "Basic RDUwRTBDMDYtMzJEMS00QjQxLUExMzctQTlBODUwQzg5MkMyOnZEZFdkS3dQTmFQQ3loQ0RoYUNuTmV5ZHlMeFNHTkpY", 
-        "Accept": "application/json"
-    }
-    tokenRequest = None
-    if accessToken == None:
-        tokenRequest = requests.post(
-            baseUrl + "/oauth2/token", data=data, headers=accesHeaders
-        )
-        if tokenRequest.status_code == 500:
-            print("Niet kunnen autoriseren! Code: 500")
-            quit()
-        elif tokenRequest.status_code == 200:
-            print("successful ingelog! Code: 200")
+    global accessToken, accesHeader, endpoint, refreshToken, baseUrl, leerlingNummer, wachtwoord, Authtime
+    if Authtime == None:
+        data = {
+            "grant_type": "password",
+            "username": schooluuid + "\\" + leerlingNummer,
+            "password": wachtwoord,
+            "scope": "openid"
+        }
+        accesHeaders = {
+            "Authorization": "Basic RDUwRTBDMDYtMzJEMS00QjQxLUExMzctQTlBODUwQzg5MkMyOnZEZFdkS3dQTmFQQ3loQ0RoYUNuTmV5ZHlMeFNHTkpY", 
+            "Accept": "application/json"}
+        tokenRequest = requests.post(baseUrl + "/oauth2/token", data=data, headers=accesHeaders)
+        if tokenRequest.status_code == 200:
+            print("Inloggen: Gelukt! Code: 200")
             tokenRequestJson = tokenRequest.json()
             accessToken = tokenRequestJson["access_token"]
             refreshToken = tokenRequestJson["refresh_token"]
+            accesHeader = {"Authorization": "Bearer " + accessToken, "Accept": "application/json"}
             endpoint = tokenRequestJson["somtoday_api_url"]
-            accesHeader = {"Authorization": "Bearer " +
-                accessToken, "Accept": "application/json"}
-            isAuth = True
+            Authtime = time.time()
         else:
-            isAuth = False
-        
-    if accessToken != None and not isAuth:
-        print("Token vernieuwen.. ")
+            Authtime = None
+            print("Inloggen: Niet gelukt! Code: {}".format(tokenRequest.status_code))
+
+    elif int(time.time() - Authtime).__round__() > 3000:
+        accesHeaders = {
+            "Authorization": "Basic RDUwRTBDMDYtMzJEMS00QjQxLUExMzctQTlBODUwQzg5MkMyOnZEZFdkS3dQTmFQQ3loQ0RoYUNuTmV5ZHlMeFNHTkpY", 
+            "Accept": "application/json"}
         data = {
             "grant_type": "refresh_token",
             "refresh_token": refreshToken
         }
-        refreshRequest = requests.post(
-            baseUrl + "/oauth2/token", data=data, headers=accesHeaders
-        )
+        refreshRequest = requests.post(baseUrl + "/oauth2/token", data=data, headers=accesHeaders)
         if refreshRequest.status_code == 200:
-            print("successful refreshtoken Code: 200")
+            print("Refreshtoken: Gelukt! Code: 200")
             refreshRequestJson = refreshRequest.json()
             accessToken = refreshRequestJson["access_token"]
             refreshToken = refreshRequestJson["refresh_token"]
@@ -115,12 +105,12 @@ def auth():
                 "Authorization": "Bearer " + accessToken, 
                 "Accept": "application/json"}
             endpoint = refreshRequestJson["somtoday_api_url"]
-            isAuth = True
+            Authtime = time.time()
         else:
-            print("Niet gelukt met refreshtoken! Code: {}".format(refreshRequest.status_code))
-    
-    if isAuth == False and tokenRequest is not None:
-        print("Niet kunnen authoriseren! Zijn je inlog gegevens goed? Code: {} Reden: {}".format(tokenRequest.status_code, tokenRequest.reason))
+            Authtime = None
+            print("Refresh Token: Niet gelukt! Code: {}".format(refreshRequest.status_code))
+    else:
+        print("Refresh Token: Gelukt Token valid!")
 
 
 def findStudentId():
@@ -132,7 +122,7 @@ def findStudentId():
         studentRequestJson = studentRequest.json()
         studentId = studentRequestJson["items"][0]["links"][0]["id"]
     else:
-        print("Fout in Student id krijgen! Code: {}".format(studentRequest.status_code))
+        print("Student id: Niet gelukt! Code: {}".format(studentRequest.status_code))
 
 
 def findAfspraken():
@@ -153,7 +143,7 @@ def findAfspraken():
     if afsprakenRequest.status_code < 400:
         intoFile(data=afsprakenRequest.json(), path="data/afspraken.json")
     else:
-        print("Er ging iets fout in afspraken! Code: {}".format(afsprakenRequest.json()))
+        print("Afspraken: Niet gelukt! Code: {}".format(afsprakenRequest.json()))
 
 
 def findcijfers():
@@ -190,7 +180,7 @@ def findcijfers():
                 cijfers.append(cijfer)
         intoFile(data=cijfers, path="data/cijfers.json")
     else:
-        print("Error met Cijfers! Code: {}".format(cijferRequest.status_code))
+        print("Cijfers: Niet gelukt! Code: {}".format(cijferRequest.status_code))
 
 
 def fetchAfspraken():
@@ -265,7 +255,7 @@ def sendWebhook(embeds):
     postHeader = {"Content-Type": "application/json"}
     postRequest = requests.post(settings["webhookUrl"], data=postData, headers=postHeader)
     if not postRequest.ok:
-        print("Iets ging fout met de Webhook!")
+        print("Webhook: Niet gelukt! Code: {}".format(postRequest.status_code))
         print("Status Code: {}".format(postRequest.status_code))
         print("Reden: {}".format(postRequest.reason))
         print("Response: {}".format(postRequest.text))
@@ -294,12 +284,10 @@ def checkles(Rtijd):
         print("Geen Les Om {}!".format(Rtijd))
     else:
         sendWebhook(embeds)
-    
     print("Checked On {}\n".format(datetime.datetime.now().strftime("%H:%M")))
 
 
 def checkcijfers():
-    global studentId
     auth()
     oudeCijfers = getFile(path="data/cijfers.json")
     findcijfers()
@@ -319,25 +307,22 @@ def checkcijfers():
         sendWebhook(embeds)
     else:
         print("Geen Nieuwe Cijfers!")
-    
     print("Checked On {}\n".format(datetime.datetime.now().strftime("%H:%M")))
-
-
 # Moet altijd eerst gebeuren!
 loadSettings()
 finduuid()
 auth()
 findStudentId()
 
-schedule.every().day.at("08:20").do(checkles, Rtijd="08:30")
-schedule.every().day.at("09:10").do(checkles, Rtijd="09:20")
-schedule.every().day.at("10:00").do(checkles, Rtijd="10:10")
-schedule.every().day.at("11:10").do(checkles, Rtijd="11:20")
-schedule.every().day.at("12:00").do(checkles, Rtijd="12:10")
-schedule.every().day.at("13:20").do(checkles, Rtijd="13:30")
-schedule.every().day.at("14:20").do(checkles, Rtijd="14:30")
-schedule.every().day.at("15:10").do(checkles, Rtijd="15:20")
-schedule.every().day.at("16:50").do(checkles, Rtijd="17:00")
+schedule.every().day.at("08:25").do(checkles, Rtijd="08:30")
+schedule.every().day.at("09:15").do(checkles, Rtijd="09:20")
+schedule.every().day.at("10:05").do(checkles, Rtijd="10:10")
+schedule.every().day.at("11:15").do(checkles, Rtijd="11:20")
+schedule.every().day.at("12:05").do(checkles, Rtijd="12:10")
+schedule.every().day.at("13:25").do(checkles, Rtijd="13:30")
+schedule.every().day.at("14:25").do(checkles, Rtijd="14:30")
+schedule.every().day.at("15:15").do(checkles, Rtijd="15:20")
+schedule.every().day.at("16:55").do(checkles, Rtijd="17:00")
 schedule.every(int(minTussenCheck)).minutes.do(checkcijfers)
 
 print("Checking The somtoday Api's ")
