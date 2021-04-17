@@ -22,7 +22,7 @@ endpoint = None
 Authtime = None
 
 # Settings:
-CheckDagen = 5      # Dagen
+CheckDagen = 3      # Dagen
 minTussenCheck = 5  # Minutes
 
 def getFile(path):
@@ -69,10 +69,10 @@ def auth():
             "grant_type": "password",
             "username": schooluuid + "\\" + leerlingNummer,
             "password": wachtwoord,
-            "scope": "openid"
+            "scope": "openid",
+            "client_id": "D50E0C06-32D1-4B41-A137-A9A850C892C2"
         }
-        accesHeaders = {
-            "Authorization": "Basic RDUwRTBDMDYtMzJEMS00QjQxLUExMzctQTlBODUwQzg5MkMyOnZEZFdkS3dQTmFQQ3loQ0RoYUNuTmV5ZHlMeFNHTkpY", 
+        accesHeaders = { 
             "Accept": "application/json"}
         tokenRequest = requests.post(baseUrl + "/oauth2/token", data=data, headers=accesHeaders)
         if tokenRequest.status_code == 200:
@@ -88,12 +88,13 @@ def auth():
             print("Inloggen: Niet gelukt! Code: {}".format(tokenRequest.status_code))
 
     elif int(time.time() - Authtime).__round__() > 3000:
-        accesHeaders = {
-            "Authorization": "Basic RDUwRTBDMDYtMzJEMS00QjQxLUExMzctQTlBODUwQzg5MkMyOnZEZFdkS3dQTmFQQ3loQ0RoYUNuTmV5ZHlMeFNHTkpY", 
+        accesHeaders = { 
             "Accept": "application/json"}
         data = {
             "grant_type": "refresh_token",
-            "refresh_token": refreshToken
+            "refresh_token": refreshToken,
+            "client_id": "D50E0C06-32D1-4B41-A137-A9A850C892C2"
+            #"client_secret": "vDdWdKwPNaPCyhCDhaCnNeydyLxSGNJX"
         }
         refreshRequest = requests.post(baseUrl + "/oauth2/token", data=data, headers=accesHeaders)
         if refreshRequest.status_code == 200:
@@ -109,8 +110,6 @@ def auth():
         else:
             Authtime = None
             print("Refresh Token: Niet gelukt! Code: {}".format(refreshRequest.status_code))
-    else:
-        print("Refresh Token: Gelukt Token valid!")
 
 
 def findStudentId():
@@ -262,70 +261,87 @@ def sendWebhook(embeds):
 
 
 def checkles(Rtijd):
-    # Vernieuw jsonfiles:
-    auth()
-    findAfspraken()
-    fetchAfspraken()
+    ttijd = Rtijd
+    try:
+        # Vernieuw jsonfiles:
+        auth()
+        findAfspraken()
+        fetchAfspraken()
 
-    # Check for Les:
-    afspraken = getFile(path="data/fetchedafspraken.json")
-    date = str(datetime.date.today())
-    lessen = []
-    for afspraak in afspraken:
-        if date + "T" + Rtijd == afspraak["Btijd"]:
-            lessen.append(afspraak)
-    
-    embeds = []
-    if lessen != []:
-        for les in lessen:
-            embeds.append(makeEmbed({ "les" : les }))
-    
-    if embeds == []:
-        print("Geen Les Om {}!".format(Rtijd))
-    else:
-        sendWebhook(embeds)
-    print("Checked On {}\n".format(datetime.datetime.now().strftime("%H:%M")))
+        # Check for Les:
+        afspraken = getFile(path="data/fetchedafspraken.json")
+        date = str(datetime.date.today())
+        lessen = []
+        for afspraak in afspraken:
+            if date + "T" + Rtijd == afspraak["Btijd"]:
+                lessen.append(afspraak)
+        
+        embeds = []
+        if lessen != []:
+            for les in lessen:
+                embeds.append(makeEmbed({ "les" : les }))
+        
+        if embeds == []:
+            print("Geen Les Om {}!".format(Rtijd))
+        else:
+            sendWebhook(embeds)
+        print("Checked On {}\n".format(datetime.datetime.now().strftime("%H:%M")))
+    except:
+        print("Servers zijn offline")
+        time.sleep(10)
+        checkles(ttijd)
 
 
 def checkcijfers():
-    auth()
-    oudeCijfers = getFile(path="data/cijfers.json")
-    findcijfers()
-    nieuweCijfers = getFile(path="data/cijfers.json")
-    
-    cijfers = []
-    for cijfer in nieuweCijfers:
-        if cijfer not in oudeCijfers:
-            cijfers.append(cijfer)
-    
-    embeds = []
-    if cijfers != []:
-        for cijfer in cijfers:
-            embeds.append(makeEmbed({"cijfer": cijfer }))
-    
-    if embeds != []:
-        sendWebhook(embeds)
-    else:
-        print("Geen Nieuwe Cijfers!")
-    print("Checked On {}\n".format(datetime.datetime.now().strftime("%H:%M")))
+    try:
+        # Vernieuw Json files:
+        auth()
+        oudeCijfers = getFile(path="data/cijfers.json")
+        findcijfers()
+        nieuweCijfers = getFile(path="data/cijfers.json")
+        
+        # Check for cijfers:
+        cijfers = []
+        for cijfer in nieuweCijfers:
+            if cijfer not in oudeCijfers:
+                cijfers.append(cijfer)
+        
+        embeds = []
+        if cijfers != []:
+            for cijfer in cijfers:
+                embeds.append(makeEmbed({"cijfer": cijfer }))
+        
+        if embeds != []:
+            sendWebhook(embeds)
+        else:
+            print("Geen Nieuwe Cijfers!")
+        print("Checked On {}\n".format(datetime.datetime.now().strftime("%H:%M")))
+    except:
+        print("Servers zijn offline")
+        time.sleep(300)
+        checkcijfers()
+
 # Moet altijd eerst gebeuren!
 loadSettings()
 finduuid()
 auth()
 findStudentId()
 
-schedule.every().day.at("08:25").do(checkles, Rtijd="08:30")
-schedule.every().day.at("09:15").do(checkles, Rtijd="09:20")
-schedule.every().day.at("10:05").do(checkles, Rtijd="10:10")
-schedule.every().day.at("11:15").do(checkles, Rtijd="11:20")
-schedule.every().day.at("12:05").do(checkles, Rtijd="12:10")
-schedule.every().day.at("13:25").do(checkles, Rtijd="13:30")
-schedule.every().day.at("14:25").do(checkles, Rtijd="14:30")
-schedule.every().day.at("15:15").do(checkles, Rtijd="15:20")
-schedule.every().day.at("16:55").do(checkles, Rtijd="17:00")
+checkles("00:00")
+schedule.every().day.at("08:20").do(checkles, Rtijd="08:30")
+schedule.every().day.at("09:10").do(checkles, Rtijd="09:20")
+schedule.every().day.at("10:00").do(checkles, Rtijd="10:10")
+schedule.every().day.at("11:10").do(checkles, Rtijd="11:20")
+schedule.every().day.at("12:00").do(checkles, Rtijd="12:10")
+schedule.every().day.at("13:20").do(checkles, Rtijd="13:30")
+schedule.every().day.at("14:20").do(checkles, Rtijd="14:30")
+schedule.every().day.at("15:10").do(checkles, Rtijd="15:20")
+schedule.every().day.at("16:50").do(checkles, Rtijd="17:00")
+#schedule.every().day.at("00:00").do(checkles, Rtijd="17:10")
+#schedule.every().day.at("07:00").do(checkles, Rtijd="17:10")
 schedule.every(int(minTussenCheck)).minutes.do(checkcijfers)
 
-print("Checking The somtoday Api's ")
+print("Checking The somtoday Api's \n")
 while True:
     schedule.run_pending()
     time.sleep(0.5)
