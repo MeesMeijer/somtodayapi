@@ -327,7 +327,7 @@ finduuid()
 auth()
 findStudentId()
 
-checkles("00:00")
+
 schedule.every().day.at("08:20").do(checkles, Rtijd="08:30")
 schedule.every().day.at("09:10").do(checkles, Rtijd="09:20")
 schedule.every().day.at("10:00").do(checkles, Rtijd="10:10")
