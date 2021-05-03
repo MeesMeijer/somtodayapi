@@ -14,7 +14,7 @@ vakken = None
 docenten = None
 
 # Api stuff:
-baseUrl = "https://production.somtoday.nl"
+baseUrl = "https://somtoday.nl"
 accessToken = None
 refreshToken = None
 accesHeader = None
